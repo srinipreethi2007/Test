@@ -1,0 +1,10 @@
+ Volume in drive F is New Volume
+ Volume Serial Number is 5ECE-E2C3
+
+ Directory of F:\pen drive\Accenture Documents\Learnings\Git\MyProject
+
+15-Apr-20  06:16 PM    <DIR>          .
+15-Apr-20  06:16 PM    <DIR>          ..
+15-Apr-20  06:16 PM                 0 test1.txt
+               1 File(s)              0 bytes
+               2 Dir(s)  39,576,412,160 bytes free

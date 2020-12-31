@@ -1,0 +1,4 @@
+mvn clean test -Dbobcat.config.contexts=chrome,hint1,hint1_AEM -Denv=hint1_AEM -Dtag=@Singonhint
+mvn clean test -Dbobcat.config.contexts=chrome,hint1,hint1_AEM -Denv=hint1_AEM -Dtag=@FTSouser
+mvn clean test -Dbobcat.config.contexts=chrome,dev,hint1_AEM -Denv=hint1_AEM -Dtag=@SecretQ
+mvn clean test -Dbobcat.config.contexts=chrome,dev,hint1_AEM -Denv=hint1 -Dtag=@TandCInt

@@ -1,0 +1,5 @@
+cd P:\3.Softwares\fscapture
+
+FSCapture.exe
+
+exit

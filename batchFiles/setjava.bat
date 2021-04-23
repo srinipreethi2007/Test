@@ -1,0 +1,9 @@
+set JAVA_HOME=C:\Program Files\Java\jdk1.8.0_131
+set M2_HOME=C:\Program Files\apache-maven-3.6.1
+set path=%path%;%JAVA_HOME%\bin;%M2_HOME%\bin
+java -version
+mvn -version
+LaunchFS
+
+PAUSE
+PAUSE

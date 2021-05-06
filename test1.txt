@@ -1,10 +1,917 @@
- Volume in drive F is New Volume
- Volume Serial Number is 5ECE-E2C3
+//package org.kp.mobile;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import javax.net.ssl.*;
+import java.net.URL;
+import groovy.json.*
+import java.util.ArrayList;
+import java.util.List; 
+import java.text.SimpleDateFormat;
+import com.atlassian.oai.validator.report.LevelResolver;
+import com.atlassian.oai.validator.report.MessageResolver;
+import com.atlassian.oai.validator.report.ValidationReport;
+import com.atlassian.oai.validator.report.ValidationReport.Message;
+import com.atlassian.oai.validator.schema.SchemaValidator;
+import static com.atlassian.oai.validator.schema.SchemaValidator.ADDITIONAL_PROPERTIES_KEY;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.FileInputStream;
+import io.swagger.models.Model;
+import io.swagger.models.RefModel;
+import io.swagger.parser.SwaggerParser;
+import java.io.IOException;
+import com.github.fge.jsonschema.core.exceptions.ProcessingException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
- Directory of F:\pen drive\Accenture Documents\Learnings\Git\MyProject
+    public class Utilities {
 
-15-Apr-20  06:16 PM    <DIR>          .
-15-Apr-20  06:16 PM    <DIR>          ..
-15-Apr-20  06:16 PM                 0 test1.txt
-               1 File(s)              0 bytes
-               2 Dir(s)  39,576,412,160 bytes free
+        public static final String DATA_FILE = "DataFile";
+        public static final String DATA_SHEET = "DataSheet";
+        public static final String DATA_CELL = "DataCell";
+        public static final String RESULTS_PATH = "ResultsPath";
+        public static final String MISSING_PROPERTY = "Property not found";
+
+        def log
+        def context
+        def testSuite
+        def propfileName
+
+        Utilities() {}
+
+        Utilities(context, testSuite, log) {
+            this.testSuite = testSuite
+            this.log = log
+            this.context = context
+        }
+
+        def result;
+
+        def callConfig() {
+        try{
+
+            def basicAuth = "Basic a3Bjb25maWc6a3Bjb25maWcxMjMk";
+            def accessToken = "fb23c40473g4a3be651f1ce7e96cwa07";
+            def url = "https://kpconfig-np.bmxp.appl.kp.org/kpconfig/pqe-config/dev11/master/pqe-config-dev11.json";
+
+            SSLContext sc = SSLContext.getInstance("TLSv1.2");
+            sc.init(null, null, new java.security.SecureRandom());
+
+            URL obj = new URL(url);
+            HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
+            con.setSSLSocketFactory(sc.getSocketFactory());
+            con.setRequestMethod("GET");
+            con.setRequestProperty("access_token", accessToken);
+            con.setRequestProperty("Authorization", basicAuth);
+            int responseCode = con.getResponseCode();
+
+            def bufferedReader = new BufferedReader(new InputStreamReader(con.getInputStream()))
+            def jsonResponse = bufferedReader.getText()
+
+            //Parse Config API Response
+            def slurper = new JsonSlurper()
+            def result = slurper.parseText(jsonResponse)
+            return result
+            }catch (IOException ex) {
+                log.info("Problem calling Config API");
+            }
+        }
+
+	   def getDatabaseConfig(String env) {
+           try {
+            def basicAuth = "Basic a3Bjb25maWc6a3Bjb25maWcxMjMk";
+            def accessToken = "fb23c40473g4a3be651f1ce7e96cwa07";
+            def url = "https://kpconfig-np.bmxp.appl.kp.org/kpconfig/pqe-config/dev11/master/pqe-config-dbconfig.json";
+
+            SSLContext sc = SSLContext.getInstance("TLSv1.2");
+            sc.init(null, null, new java.security.SecureRandom());
+
+            URL obj = new URL(url);
+            HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
+            con.setSSLSocketFactory(sc.getSocketFactory());
+            con.setRequestMethod("GET");
+            con.setRequestProperty("access_token", accessToken);
+            con.setRequestProperty("Authorization", basicAuth);
+            int responseCode = con.getResponseCode();
+
+            def bufferedReader = new BufferedReader(new InputStreamReader(con.getInputStream()))
+            def jsonResponse = bufferedReader.getText()
+
+            //Parse Config API DB Config Response
+            def slurper = new JsonSlurper()
+
+            def envResult = slurper.parseText(jsonResponse).Configuration.DBConfig.(env.toUpperCase())
+            return envResult
+            }catch (IOException ex) {
+                log.info("Problem calling Config DB API");
+            } 
+        }
+
+         def getSkytapDatabaseConfig(String env) {
+            try {
+            def get = new URL("http://xjzxdod0014x.dta.kp.org:3333/env/info/" + URLEncoder.encode(env, "UTF-8")).openConnection();
+	    def getRC = get.getResponseCode();
+           
+            def jsonResponse = get.getInputStream().getText();
+            //log.info jsonResponse;
+            
+            //Parse Skytap Config Response
+            def slurper = new JsonSlurper()
+
+            
+            def skyDBHost = slurper.parseText(jsonResponse).dispatcherList
+            
+            return skyDBHost
+            }catch (IOException ex) {
+                log.info("Problem calling Skytap API");
+            }
+        } 
+        
+        def getDbConfig(String env) { 
+
+   		try{
+            def skyDBHost
+            def envResult
+            
+            if ((env.startsWith("fs")) || (env.startsWith("ss"))){
+            // get DB host from Skytap config and rest of the DB details from config API
+            skyDBHost = getSkytapDatabaseConfig(env);
+            envResult = getDatabaseConfig("dev10");
+
+            }else{
+            envResult = getDatabaseConfig(env);
+            }
+      
+
+            if (envResult == null || envResult == ""){
+            	log.info "Database Config doesn't exist, use from local or Contact your test lead"
+            }else{
+
+          
+            // Clear DB properties on testsuite if there are any
+                def data = context.testCase.testSuite;
+
+                String[] propToRemove = new String[data.getPropertyCount()];
+                propToRemove = data.getPropertyNames();
+                for (int i = 0; i < propToRemove.size(); i++) {
+                    if (propToRemove[i].contains('Config_') || propToRemove[i].contains('DB_')) {
+                        data.removeProperty(propToRemove[i]);
+                    }
+                }
+
+	            def myTestStep = context.testCase.testSuite
+                    if ((env.startsWith("fs")) || (env.startsWith("ss"))){
+                    myTestStep.setPropertyValue('DB_Host', skyDBHost)
+                    }else{
+                     myTestStep.setPropertyValue('DB_Host', envResult.DBHost)
+                    }
+	            myTestStep.setPropertyValue('DB_SID', envResult.DBSID)
+	            myTestStep.setPropertyValue('DB_Schema', envResult.DBSchema)
+	            myTestStep.setPropertyValue('DB_Port', envResult.DBPort)
+	            myTestStep.setPropertyValue('DB_User', envResult.WPPUser)
+	            myTestStep.setPropertyValue('DB_Password', envResult.WPPUserPwd)  
+	            myTestStep.setPropertyValue('Config_CachingUser', envResult.CachingUser)
+	            myTestStep.setPropertyValue('Config_CachingUserPwd', envResult.CachingUserPwd)
+	            myTestStep.setPropertyValue('Config_CMSUser', envResult.CMSUser)
+	            myTestStep.setPropertyValue('Config_CMSUserPwd', envResult.CMSUserPwd)
+	            myTestStep.setPropertyValue('Config_ConfigUser', envResult.ConfigUser)
+	            myTestStep.setPropertyValue('Config_ConfigUserPwd', envResult.ConfigUserPwd)
+	            myTestStep.setPropertyValue('Config_CryptoUser', envResult.CryptoUser)
+	            myTestStep.setPropertyValue('Config_CryptoUserPwd', envResult.CryptoUserPwd)
+	            myTestStep.setPropertyValue('Config_DMCUser', envResult.DMCUser)
+	            myTestStep.setPropertyValue('Config_DMCUserPwd', envResult.DMCUserPwd)
+	            myTestStep.setPropertyValue('Config_DrugUser', envResult.DrugUser)
+	            myTestStep.setPropertyValue('Config_DrugUserPwd', envResult.DrugUserPwd)
+	            myTestStep.setPropertyValue('Config_FDSUser', envResult.FDSUser)
+	            myTestStep.setPropertyValue('Config_FDSUserPwd', envResult.FDSUserPwd)
+	
+	            log.info "Database Config retrieved for : "+env.toUpperCase()
+
+            }
+            }catch (IOException ex) {
+                log.info("Problem calling Config API - DB Config File");
+            }
+        }
+        
+        //we pass environment-Name, and we get a Map containing  url, user,password for the respective Environment
+        Map getDbConnectionMap(String userType) {
+            StringBuilder createString = new StringBuilder();
+            def activeEnv = testSuite.project.activeEnvironment.name
+            def envResult = getDatabaseConfig(activeEnv);
+            Map connectionMap = new HashMap();
+            if (envResult) {
+                createString.append("jdbc:oracle:thin:@");
+                createString.append(envResult.DBHost);
+                createString.append(":");
+                createString.append(envResult.DBPort);
+                String dB_Schema = envResult.DBSchema;
+                String dB_SID = envResult.DBSID;
+                if (dB_Schema != null && dB_Schema.trim().length() > 0) {
+                    createString.append("/");
+                    createString.append(envResult.DBSchema);
+                } else if (dB_SID != null && dB_SID.trim().length() > 0) {
+                    createString.append(":");
+                    createString.append(envResult.DBSID);
+                } else {
+                    log.info " the value of Both dB_Schema and dB_SID is null or empty, Null will be returned"
+                    return;
+                }
+                String ulrString = createString.toString()
+                userType = userType.toUpperCase();
+                String dbUser = null;
+                String dbPassword = null;
+                switch (userType) {
+                    case "WPP":
+                        dbUser = envResult.WPPUser;
+                        dbPassword = envResult.WPPUserPwd;
+                        break
+                    case "CACHING":
+                        dbUser = envResult.CachingUser;
+                        dbPassword = envResult.CachingUserPwd;
+                        break
+                    case "CMS":
+                        dbUser = envResult.CMSUser;
+                        dbPassword = envResult.CMSUserPwd;
+                        break
+                    case "CONFIG":
+                        dbUser = envResult.ConfigUser;
+                        dbPassword = envResult.ConfigUserPwd;
+                        break
+                    case "DRUG":
+                        dbUser = envResult.DrugUser;
+                        dbPassword = envResult.DrugUserPwd;
+                        break
+                    case "FDS":
+                        dbUser = envResult.FDSUser;
+                        dbPassword = envResult.FDSUserPwd;
+                        break
+                    case "DMC":
+                        dbUser = envResult.DMCUser;
+                        dbPassword = envResult.DMCUserPwd;
+                        break
+                    case "CRYPTO":
+                        dbUser = envResult.CryptoUser;
+                        dbPassword = envResult.CryptoUserPwd;
+                        break
+                    default:
+	                   log.info " The User-Type \" $userType \" is not a proper User-Type,  Null will be returned"
+	                   return
+                } //end switch
+                connectionMap.put('url', ulrString)
+                connectionMap.put('user', dbUser)
+                connectionMap.put('password', dbPassword)
+            } // end if (envResult)
+            
+            return connectionMap;  //return the populated man.
+        }
+        
+
+        def getSkippedRegions(response) {
+        	try {
+                // Clear KSID properties on testsuite if there are any
+                def data = context.testCase.testSuite;
+
+                String[] propToRemove = new String[data.getPropertyCount()];
+                propToRemove = data.getPropertyNames();
+                for (int i = 0; i < propToRemove.size(); i++) {
+                    if (propToRemove[i].contains('ExcludeRegions')) {
+                        data.removeProperty(propToRemove[i]);
+                    }
+                }
+
+                //GetExcludedRegions
+                def result = response
+                def regionConfig = result.Configuration.RegionConfig.Regions.Excluded
+                def myTestStep1 = context.testCase.testSuite
+
+                if (regionConfig[0] == '' || regionConfig[0] == null) {
+                    def ExcludedRegions = "No Excluded Regions"
+                    myTestStep1.setPropertyValue('ExcludeRegions', ExcludedRegions)
+                    log.info ExcludedRegions
+                } else {
+                    def ExcludedRegions = regionConfig[0]
+                    myTestStep1.setPropertyValue('ExcludeRegions', ExcludedRegions)
+                    log.info ExcludedRegions
+                }
+            } catch (NullPointerException e) {
+                log.info("Excluded Regions are empty");
+            }
+        }
+
+        def loadConfigurations(String servName) {
+
+            loadConfigurations();
+            try {
+
+                // Clear KSID properties on testsuite if there are any
+                def data = context.testCase.testSuite;
+
+                String[] propToRemove = new String[data.getPropertyCount()];
+                propToRemove = data.getPropertyNames();
+                for (int i = 0; i < propToRemove.size(); i++) {
+                    if (propToRemove[i].contains('KSID') || propToRemove[i].contains('KSPassword') || propToRemove[i].contains('APIKey')) {
+                        data.removeProperty(propToRemove[i]);
+                    }
+                }
+
+                //Parse Config API Response
+                def ks = result.Configuration.KSConfig.(servName.toString())
+
+                //Filter and extract the credentials needed for the Service
+                if (ks != null) {
+                    def credSize = ks.size()
+                    for (int i = 0; i < credSize; i++) {
+
+                        def ConsumerName = ks.Consumer[i];
+                        def ConsumerKSID = ks.KSID[i];
+                        def ConsumerKSPwd = ks.pwd[i];
+                        def ConsumerAPIKey = ks.apikey[i];
+
+                        def myTestStep = context.testCase.testSuite
+                        if ((ConsumerKSID != '' || ConsumerKSPwd == 'null') && (ConsumerKSPwd == '' || ConsumerKSPwd == 'null')) {
+                            log.info "Consumer KSID Password missing for :" + ConsumerName + ". Please Contact PQE Lead"
+                        } else {
+                            myTestStep.setPropertyValue(ConsumerName + '_KSID', ConsumerKSID)
+                            myTestStep.setPropertyValue(ConsumerName + '_KSPassword', ConsumerKSPwd)
+                            myTestStep.setPropertyValue(ConsumerName + '_APIKey', ConsumerAPIKey)
+                        }
+                    }
+                } else {
+                    log.info "No Credentials exist for the Service/API. Please Contact PQE Lead"
+                }
+            } catch (Exception ex) {
+                log.info("Config API response is empty");
+            }
+        }
+
+        def loadConfigurations() {
+        	result = callConfig();
+        	getSkippedRegions(result);
+
+            String actEnv
+            if (testSuite.project.hasProperty("Active_Environment")) {
+                actEnv = getProperty(testSuite.project, "Active_Environment")
+                
+                if (actEnv != null && actEnv != "") {
+                    testSuite.project.setActiveEnvironment(actEnv)
+                }
+            }
+
+            def activeEnv = testSuite.project.activeEnvironment.name
+          
+            if (activeEnv != activeEnv.toUpperCase()) {
+                log.info "Invalid Environment Name"
+                setProperty(testSuite.project, "Active_Environment", "")
+            } else {
+                def configFilePath = getResourceRoot()
+                String resRoot = getResourceRoot().toString()
+				if(configFilePath.contains("test-suite"))
+				{
+					configFilePath = (configFilePath.substring(0,configFilePath.lastIndexOf(File.separator)))
+					configFilePath = configFilePath + "-test-config"
+				}else{
+					configFilePath = configFilePath + "-test-config"
+				}
+				def configFile
+				def propfileName
+
+                activeEnv = activeEnv.toLowerCase()
+                if ((activeEnv.startsWith("fs")) || (activeEnv.startsWith("ss"))){
+                	propfileName = 'skytap.properties'
+                	configFile = configFilePath + File.separator + 'res' + File.separator + propfileName
+                } else{
+                	propfileName = activeEnv + '.properties'
+                	configFile = configFilePath + File.separator + 'res' + File.separator + propfileName
+                }
+                log.info "configFile is: "+configFile
+                // read the file
+                def properties = new java.util.Properties();
+                try {
+                    properties.load(new java.io.FileInputStream(configFile))
+                } catch (ex) {
+                    log.info ex
+                }
+                def propKeys = []
+                propKeys = properties.propertyNames()
+
+                while (propKeys.hasMoreElements()) {
+                    def propKey = propKeys.nextElement()
+                    def propValue = properties.getProperty(propKey)
+
+                    if ((propKey == 'baseURI') || (propKey == 'Active_Environment')) {
+                        setProperty(testSuite.project, propKey, propValue)
+
+                    } else {
+                    	if ((activeEnv.startsWith("fs")) || (activeEnv.startsWith("ss"))){
+                    		setProperty(testSuite, propKey, propValue.replace("<env>",activeEnv))
+                    	}else{
+                        	setProperty(testSuite, propKey, propValue)
+                        }
+                    }
+                }
+                getDbConfig(activeEnv);
+                setDataFilePath()
+                setResultsDirPath()
+            }
+            if (actEnv != null && actEnv != "") {
+                setProperty(testSuite.project, "Active_Environment", "")
+            }
+
+        }
+
+        def String getResourceRoot() {
+            def resRoot = testSuite.project.resourceRoot
+            String resourceRoot = context.expand(resRoot)
+
+           	return resourceRoot
+        }
+
+        def String setProperty(propScope, propKey, propValue) {
+            if (!propScope.hasProperty(propKey)) {
+                propScope.addProperty(propKey)
+            }
+            // List of all RESTRICTED URL here, these endpoints are not allowed.
+            String IDCBase = 'https://service-bus-02.kp.org:'
+            String NDCBase = 'https://service-bus-41.kp.org:'
+            String DMZBase = 'https://apiservice-bus-01.kp.org/'
+            String F51 = 'https://ebiz-isprdg.kp.org'
+            String F52 = 'https://ebiz-isprd1.lvdc.kp.org'
+            String F53 = 'https://ebiz-isprd2.lvdc.kp.org'
+
+            //Check if Property value contains any restricted url
+            if (propValue.contains(IDCBase) ||
+                propValue.contains(NDCBase) ||
+                propValue.contains(DMZBase) ||
+                propValue.contains(F51) ||
+                propValue.contains(F52) ||
+                propValue.contains(F53)) {
+                propScope.setPropertyValue(propKey, "$propKey- Cannot use restricted url")
+                log.info("!!!!! Found restricted service endpoint while loading " + propfileName + " file !!!!!")
+            } else {
+                propScope.setPropertyValue(propKey, propValue)
+            }
+        }
+
+        def String getProperty(propScope, propKey) {
+            def propValue
+            if (!propScope.hasProperty(propKey)) {
+                propValue = MISSING_PROPERTY
+            }
+            propValue = propScope.getPropertyValue(propKey)
+            return propValue
+        }
+
+        def setDataFilePath() {
+			def dataFile = setExcelFilePath() + File.separator + context.expand( '${#TestSuite#DataDir}' ) + File.separator + context.expand( '${#TestSuite#DataFilename}' )
+			setProperty(testSuite,DATA_FILE,dataFile )
+        }
+
+        def String getDataFilePath() {
+            return getProperty(testSuite, DATA_FILE)
+        }
+
+        def setResultsDirPath() {
+            def resRoot = getResourceRoot()
+            def resultsDir = resRoot + File.separator + context.expand('${#TestSuite#ResultsDir}') + File.separator
+            setProperty(testSuite, RESULTS_PATH, resultsDir)
+        }
+
+        def String getResultsDirPath() {
+            return getProperty(testSuite, RESULTS_PATH)
+        }
+
+        def setExcelDataSource(runner, teststepName) {
+            def dataPath = getDataFilePath()
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setFileName(dataPath)
+            def dataSheet = getProperty(runner.testCase.testSuite, DATA_SHEET)
+            dataSource.setWorksheet(dataSheet)
+            def dataCell = getProperty(runner.testCase.testSuite, DATA_CELL)
+            dataSource.setStartCell(dataCell)
+        }
+
+        def setExcelDataSource(runner, teststepName, filename, sheetname, startcell) {
+        	def resRoot = getResourceRoot().toString()
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setFileName(filename)
+            dataSource.setWorksheet(sheetname)
+            dataSource.setStartCell(startcell)
+        }
+
+        def setDataSource(runner) {
+            def dataFile = setExcelFilePath() + File.separator + context.expand( '${#TestSuite#DataDir}' ) + File.separator + context.expand( '${#TestSuite#DataFilename}' )
+			def dataSource = runner.testCase.getTestStepByName('DataSource').getDataSource()
+            dataSource.setFileName(dataFile)
+            dataSource.setWorksheet(context.expand( '${#TestSuite#DataSheet}' ))
+            dataSource.setStartCell(context.expand( '${#TestSuite#DataCell}' ))
+        }
+
+        def setDataSource(runner, teststepName, filename, sheetname, startcell) {
+            def dataFile = setExcelFilePath() + File.separator + context.expand( '${#TestSuite#DataDir}' ) + File.separator + filename
+			def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setFileName(dataFile)
+            dataSource.setWorksheet(sheetname)
+            dataSource.setStartCell(startcell)
+        }
+
+        def String setExcelFilePath(){
+        	def resRoot = getResourceRoot().toString()
+            if(resRoot.contains("test-suite"))
+			{
+				resRoot = (resRoot.substring(0,resRoot.lastIndexOf(File.separator)))
+				resRoot = ".."+File.separator+".."+resRoot.substring(resRoot.lastIndexOf(File.separator))+"-test-config"
+			}else{
+				resRoot = ".."+resRoot.substring(resRoot.lastIndexOf(File.separator))+"-test-config"
+			}
+			return resRoot
+        }
+
+        // Arshdeep on 05/05/2014: I have just added a new method called setDataSource .
+        //This method accepts 5 arguments, including Runner, datasource_Stepname ,datafile,data sheet and data cell .
+        //It will look for the given arguments (datafile,data sheet and data cell) in the testSuite properties (as specified in properties file)
+        //and set the datasource accordingly.
+        //This mostly helps when we have multiple spreadsheets in excel sheet, and we want to specify them in the .properties file for using in project.
+
+        // Updated by Shankar-  def setDataSource(runner, teststepName, filename, sheetname, startcell)
+        // Takes five parameters and sets datasource.
+
+        def setExcelDataSourceFile(runner, teststepName, filename) {
+            def resRoot = getResourceRoot()
+            def dataFile = resRoot + File.separator + context.expand('${#TestSuite#DataDir}') + File.separator + filename
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setFileName(dataFile)
+        }
+
+        def setExcelDataSourceSheet(runner, teststepName, sheetname) {
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setWorksheet(sheetname)
+        }
+
+        def setExcelDataSourceDataSheet(runner, teststepName, sheetname) {
+            def sn = getProperty(testSuite, sheetname)
+            setExcelDataSourceSheet(runner, teststepName, sn)
+        }
+
+        def setExcelDataSourceCell(runner, teststepName, startcell) {
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setStartCell(startcell)
+        }
+
+        def setExcelDataSourceIndividualDataSheet(runner, teststepName, sheetname) {
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            def sn = getProperty(testSuite, sheetname)
+            dataSource.setWorksheet(sn)
+        }
+
+        def clearExcelDataSource(runner, teststepName) {
+            def dataSource = runner.testCase.getTestStepByName(teststepName).getDataSource()
+            dataSource.setFileName('')
+            dataSource.setWorksheet('')
+            dataSource.setStartCell('')
+        }
+
+        def String getMyChartId(ptidentifiers_list, region) {
+            String mychart_id = null
+            def found = false
+            def mychart_acctid
+
+            def ptidentifiers_count = ptidentifiers_list.size()
+            assert(ptidentifiers_count > 0), 'Response not found'
+
+            if (ptidentifiers_count > 0) {
+                ptidentifiers_list.each {
+                    if ((region == 'NCA') || (region == 'MRN') || (region == 'SCA')) {
+                        if (it.IDType == 'WPRCID') {
+                            mychart_acctid = it.ID
+                            found = true
+                            mychart_id = mychart_acctid
+                        }
+                    } else {
+                        if (it.IDType == 'WPRINTERNAL') {
+                            mychart_acctid = it.ID
+                            found = true
+                            mychart_id = mychart_acctid
+                        }
+                    }
+                }
+                assert found == true, 'MyChart id not found'
+            }
+            return mychart_id
+        }
+        
+        //This function does basic validation to JSON-Response from API request 
+        //Example:- utils.validateFields(healthSummary_json.HealthSummary.Allergies, "Name:Kaiser|intel","Noted:8/23/2018","Reactions:empty");
+        def validateFields(Object...arrayOfFieldstoCheck) { //these parameter is in array format, later we will convert the array to List.
+            List listOfFieldstoCheck = new ArrayList();
+            Arrays.asList(arrayOfFieldstoCheck) //converts array to list, we do this for the flexibility that is provided by the List.
+            listOfFieldstoCheck = arrayOfFieldstoCheck;
+
+            def parsedJsonObject = listOfFieldstoCheck[0]; //this parsedJsonObject is the JOSN.path Object as a first parameter 
+            listOfFieldstoCheck.remove(0) // we remove the Json-Path from the List
+            assert parsedJsonObject != null, ' JSON Response not returned , The response is empty'
+            //assert parsedJsonObject.size() != 0, ' The JSONresponse is Empty'
+            if (parsedJsonObject.size() == 0) { // warn Json response is empty
+                log.info "The Json Response returned is Empty no Validation of Fields  is Required"
+            }
+
+            for (int i = 0; i < parsedJsonObject.size(); i++) { //we iterate the JSON
+
+                for (field in listOfFieldstoCheck) { //we iterate each block of data present in the JSON-Response
+                    boolean matchDataOfFields = true;
+                    if (field[-1] == ":") { // field cannot end with :, meta-Data needs to be provided after :
+                        assert false, "the Field \"$field\" ends with \":\" the metaData is missing"
+                    }
+
+                    List fieldList = field.split(':') //we separate the data from metaData
+                    String originalfield = field;
+                    field = fieldList[0].trim() //this is field passed as parameter
+                    int fieldLength = field.length();
+                    int originalFieldLength = originalfield.length();
+
+                    if (originalFieldLength > fieldLength) {
+                        originalfield = originalfield.substring(fieldLength + 1, originalFieldLength)
+                    }
+
+                    List listMetaData = null
+                    if (fieldList[1]) { // this checks is the field has meta-Data
+                        //listMetaData=fieldList[1].split('\\|')
+                        listMetaData = originalfield.split('\\|')
+                    }
+                    def fieldValue = null
+                    if (parsedJsonObject instanceof Map) {
+                        boolean fieldPresent = field in parsedJsonObject.keySet()
+                        if (!fieldPresent) {
+                            assert false, "the Field \"$field\" is not present"
+                        }
+                        fieldValue = parsedJsonObject[field]
+                    } else {
+                        fieldValue = parsedJsonObject[i][field]
+                        if (!(field in parsedJsonObject[i].keySet())) { //if the field passed as parameter is not present in the JSON-response. then assert 
+                            assert false, "the Field $field is not present"
+                        }
+                    }
+
+
+                    if (fieldValue != null) { // any circumstance the value of a field cannot be "null" as String
+                        // def fieldValue =  parsedJsonObject[i][field]
+                        if (fieldValue instanceof String) {
+                            assert!fieldValue.equalsIgnoreCase("null"), "the Field \"$field\" is \"null\" as String"
+                        }
+                    }
+
+                    //evaluate the metaData
+                    String dateFormat_MetaData = null
+                    boolean containsEmpty = false
+                    boolean containsNull = false
+                    boolean containsNumber = false
+                    boolean containsBoolean = false
+                    boolean metaDataisDateFormat = false
+                    boolean containsDateFormat = false
+                    boolean containsString = false
+                    boolean containsList = false
+                    boolean containsRegex = false
+
+		            List < String > listofTrimString = new ArrayList < String > ();
+                   
+                    String metaDataRegex= null
+                    for (String data: listMetaData) {
+                        data = data.trim();
+                        listofTrimString.add(data)
+                        if (data.equalsIgnoreCase("empty"))
+                            containsEmpty = true
+                        if (data.equalsIgnoreCase("null"))
+                            containsNull = true
+                        if (data.equalsIgnoreCase("number"))
+                            containsNumber = true
+                        if (data.equalsIgnoreCase("boolean"))
+                            containsBoolean = true
+	            		if (data.equalsIgnoreCase("string"))
+	                        containsString = true
+                		if (data.equalsIgnoreCase("list") || data.equalsIgnoreCase("array"))
+ 	                        containsList = true
+                        if (data.length() > 7 && data.substring(0,6).equalsIgnoreCase("regex-")) {
+ 	                        containsRegex = true
+ 	                        metaDataRegex=data.substring(6);
+ 	                   	}
+                        boolean metaDataContains_MDY = data.matches(".*[mM].*") && data.matches(".*[dD].*") && data.matches(".*[yY].*")
+                        int lengthofData = data.length()
+                        if (metaDataContains_MDY && lengthofData < 11 && (data.count("-") == 2 || data.count("/") == 2 || data.count(".") == 2)) {
+                            metaDataisDateFormat = true;
+                            dateFormat_MetaData = data
+                        }
+
+                    }
+
+                    listMetaData = listofTrimString; //now the all the element  in meta-data List  is trimmed.
+
+
+
+
+                    boolean isFieldValueNull = false
+                    boolean isFieldValueEmpty = false
+
+                    if (fieldValue == null)
+                        isFieldValueNull = true;
+
+                    if (fieldValue != null || fieldValue == "") {
+                        if (fieldValue instanceof String || fieldValue == "") { //if field value is instance of String the assert length of String more than 0
+                            int stringLength = fieldValue.trim().length()
+                            if (stringLength == 0) {
+                                isFieldValueEmpty = true;
+                            }
+                        }
+                        if (fieldValue instanceof Collection) { //if field value is instance of List, then assert the List is not Empty
+                            Boolean isListEmpty = fieldValue.isEmpty()
+                            if (isListEmpty)
+                                isFieldValueEmpty = true;
+                        }
+                    }
+
+                    if (listMetaData == null || !containsNull) { //  validate the field should not be "null" or "empty" if metaData "null" is not provided 
+                        assert!isFieldValueNull, "the Field \"$field\" is null"
+                    }
+                    if (listMetaData == null || !containsEmpty) { // validate the field should be empty, if metaDate "empty" is not provided
+                        assert!isFieldValueEmpty, "the Field \"$field\" is empty-"
+                    }
+
+
+                    if (listMetaData == null || isFieldValueNull || isFieldValueEmpty) { //if no meta-Data or the field-Value is null or empty,
+                        continue // then no further validation required
+                    }
+
+                    if (containsNumber) { // check if the field Value is Number
+                        boolean isaNumber = false
+
+                        if (fieldValue instanceof Number) {
+                            isaNumber = true
+                        } else if (fieldValue instanceof String) {
+                            try {
+                                isaNumber = fieldValue.matches("-?\\d+(\\.\\d+)?")
+                            } catch (Exception e) {
+                                assert false, "the value of  \"$field\" is  \"$fieldValue\" is not a Number"
+                            }
+
+                        }else {
+                        	isaNumber = false;
+                        }
+                        assert isaNumber, "the value of  \"$field\" is  \"$fieldValue\" is not a Number"
+
+                    }
+
+                    if (containsBoolean) {  //check if the fieldValue is Boolean
+                        assert fieldValue instanceof Boolean, "the value of  \"$field\" is  \"$fieldValue\" is not Boolean"
+                    }
+                    if (containsString) {  //check if the fieldValue is Boolean
+                        assert fieldValue instanceof String, "the value of  \"$field\" is  \"$fieldValue\" is not String"
+                    }
+                    if (containsList) {  //check if the fieldValue is List
+                        assert fieldValue instanceof List, "the value of  \"$field\" is  \"$fieldValue\" is not List or Array"
+                    }
+                    
+                    if (containsRegex) {  //validate regex
+                    	Pattern pattern = Pattern.compile(metaDataRegex);
+                    	Matcher matcher =  pattern.matcher(fieldValue);
+                    	boolean booleanRegexMatch=matcher.matches()
+            			assert booleanRegexMatch, "the value of  \"$field\" is  \"$fieldValue\" doesnot matches regex \"$metaDataRegex\"" 
+                    	
+                    } 
+                    
+                    
+
+                    //this validates date format
+                    if (dateFormat_MetaData) {
+                        dateFormat_MetaData = dateFormat_MetaData.toLowerCase();
+                        dateFormat_MetaData = dateFormat_MetaData.replaceAll('m', 'M') //we replace m with M, as m sand for minutes and M for month
+                        SimpleDateFormat dateFormat = new SimpleDateFormat(dateFormat_MetaData); //using SimpleDateFormat library to validate the format of Date
+                        dateFormat.setLenient(false);
+                        if (fieldValue instanceof String) {
+                            try {
+                                dateFormat.parse(fieldValue);
+                                //format.parse(new Date(fieldValue));
+                            } catch (Exception e) {
+                                assert false, "date value  \"$fieldValue\" of field \"$field\" is not correct Date format \"$dateFormat_MetaData\""
+                            }
+                        }
+                        if (fieldValue instanceof List) {
+                            for (String dateField in fieldValue) {
+                                try {
+                                    dateFormat.parse(dateField);
+                                } catch (Exception e) {
+                                    assert false, "date \"$dateField\" present in List \"$fieldValue\" is not correct Date Format \"$dateFormat_MetaData\""
+                                }
+                            }
+                        }
+                    }
+
+                    int coumtMetaKeywords = 0;
+                    if (containsEmpty)
+                        coumtMetaKeywords++;
+                    if (containsNull)
+                        coumtMetaKeywords++;
+                    if (containsNumber)
+                        coumtMetaKeywords++;
+                    if (containsBoolean)
+                        coumtMetaKeywords++;
+                    if (metaDataisDateFormat)
+                        coumtMetaKeywords++;
+                    if (containsString)
+                        coumtMetaKeywords++;
+                    if (containsList)
+                        coumtMetaKeywords++;
+                    if (containsRegex)
+                        coumtMetaKeywords++;
+
+                    if (listMetaData.size == coumtMetaKeywords) // if metaData contains only keywords 
+                        continue // then no further validation required
+
+
+                    //match the field value to the meataData
+                    if (matchDataOfFields) { // if meaData is not is not DateFormat. match metaData with Field Value 
+                    	if (!(fieldValue instanceof Collection)){
+                    		fieldValue = String.valueOf(fieldValue)
+                    		String metaDataProvided = listMetaData.join(',');
+                    		boolean  stringMatch = listMetaData.contains(fieldValue)
+                    		assert stringMatch, "the data of Field \"$field\" is \"$fieldValue\" does not match the provided data \"$metaDataProvided\""
+                    	}
+
+                        if (fieldValue instanceof List) { //if the field-value is List
+                            for (String fieldValueString in fieldValue) {
+                                //fieldValueString = fieldValueString.trim()
+                                boolean stringMatch = listMetaData.contains(fieldValueString)
+                                assert stringMatch, "the data of Field \"$field\" is \"$fieldValueString\" does not match the list of  provided data \"$listMetaData\""
+                            }
+
+                        }
+                    } 
+                } //end for (field in listOfFieldstoCheck
+            } //end for (int i = 0; i < parsedJsonObject.size(); i++)
+        } //ends validateFields
+		
+		
+		//This function does contract validation testing by comparing the swagger file(this file has the definition of all api calls) and the json response.
+		//Pre-conditions to use this utility: 
+		//			- Create a folder and name it to "Swagger" inside the test-config folder
+		//			- Place your swagger definition file inside "Swagger" folder.
+		//			- Rename your swagger definition file as "swagger_definition.yaml"
+		//Example:-
+		//	String definition_name = "#/definitions/ListMessagesResponse"
+		//  String actual_response = context.expand( '${ListMessagesResponse#Response}' )
+        //  def result = utils.swaggerValidator(actual_response.toString(),definition_name);
+		//Output:-
+		//	Error log is created inside "Swagger" folder.
+		//Libraries used: Swagger_request_validator_core 1.5.1, SwaggerParser
+		
+	def boolean swaggerValidator(String json_response,String definitionName){
+		try {
+		
+			def resRoot = getResourceRoot()
+			boolean result = false
+			if(resRoot.contains("test-suite")){
+						
+				resRoot = resRoot.substring(0,resRoot.lastIndexOf(File.separator))+"-test-config"
+						
+			}else{
+				resRoot = resRoot +"-test-config"
+			}
+			def swaggerFilePath = resRoot + File.separator + "Swagger" + File.separator + "swagger_definition.yaml"
+			def errorlogfilePath = resRoot + File.separator + "Swagger" + File.separator + "errorLog.txt"
+			final SchemaValidator validator = new SchemaValidator(new SwaggerParser().read(swaggerFilePath),
+						new MessageResolver(
+								LevelResolver
+										.create()
+										.withLevel(ADDITIONAL_PROPERTIES_KEY, ValidationReport.Level.IGNORE)
+										.build()));
+
+				
+			final Model schema = new RefModel(definitionName);
+			ValidationReport report = validator.validate(json_response, schema);
+			FileWriter file;
+			File f = new File(errorlogfilePath);
+			String newLine = System.getProperty("line.separator");
+			if(f.exists() && !f.isDirectory()) { 
+				f.delete()
+			}				
+			file  = new FileWriter(errorlogfilePath)
+			if (report.hasErrors()) {
+				for (Message msg : report.getMessages()) {
+					file.write(msg.toString() + newLine);
+				}
+				file.close()
+			} else {
+				result = true
+			}
+			return result
+		}
+		catch(IOException e) {
+			
+			assert false, "Error message - IOException"
+			return false
+		}
+		catch(ProcessingException e) {
+			
+			assert false, "Error message - ProcessingException"
+			return false
+		}
+			
+			
+	}
+ }

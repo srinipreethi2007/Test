@@ -1,35 +1,35 @@
-
-Sub CombineFiles()
+Sub CopySheetsToMaster()
+    Dim sourceFolder As String
+    Dim masterFile As String
+    Dim fileExt As String
+    Dim sourceFile As String
+    Dim wbMaster As Workbook
+    Dim wbSource As Workbook
+    Dim ws As Worksheet
     
-    Dim Path As String
-    Dim FileName As String
-    Dim SheetName As String
-    Dim MasterSheet As Worksheet
-    Dim SourceWorkbook As Workbook
-    Dim TargetWorkbook As Workbook
+    'Set the source folder, master file, and file extension
+    sourceFolder = "C:\FolderName\"
+    masterFile = "Master.xlsx"
+    fileExt = "*.xlsx"
     
-    'Change the path to the folder that contains the files you want to combine
-    Path = "C:\Users\UserName\Desktop\Files\"
+    'Open the master file and create a new sheet
+    Set wbMaster = Workbooks.Open(sourceFolder & masterFile)
+    wbMaster.Sheets.Add(After:=wbMaster.Sheets(wbMaster.Sheets.Count)).Name = "Combined"
     
-    'Change the name of the master workbook to the name you want
-    Set TargetWorkbook = Workbooks.Add
-    TargetWorkbook.SaveAs Filename:="Combined.xlsx"
-    Set MasterSheet = TargetWorkbook.Sheets(1)
-    
-    FileName = Dir(Path & "*.xlsx")
-    
-    Do While FileName <> ""
-        Set SourceWorkbook = Workbooks.Open(Path & FileName)
-        For Each Sheet In SourceWorkbook.Sheets
-            Sheet.Copy After:=MasterSheet
-            Set MasterSheet = ActiveSheet
-        Next Sheet
-        SourceWorkbook.Close False
-        FileName = Dir()
+    'Loop through all files in the source folder with the specified file extension
+    sourceFile = Dir(sourceFolder & fileExt)
+    Do While sourceFile <> ""
+        'Open the source file and loop through all sheets
+        Set wbSource = Workbooks.Open(sourceFolder & sourceFile)
+        For Each ws In wbSource.Worksheets
+            'Copy the sheet to the master file's Combined sheet
+            ws.Copy after:=wbMaster.Sheets(wbMaster.Sheets.Count)
+        Next ws
+        wbSource.Close SaveChanges:=False
+        sourceFile = Dir
     Loop
     
-    'Save and close the target workbook
-    TargetWorkbook.Save
-    TargetWorkbook.Close
-    
+    'Save and close the master file
+    wbMaster.SaveAs Filename:=sourceFolder & "Combined.xlsx"
+    wbMaster.Close SaveChanges:=False
 End Sub

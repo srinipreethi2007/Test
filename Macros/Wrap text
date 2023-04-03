@@ -1,0 +1,16 @@
+Sub WrapTextIfWidthGreaterThan36()
+
+    Dim ws As Worksheet
+    Dim lastCol As Long
+    Dim i As Long
+    
+    Set ws = ActiveSheet
+    lastCol = ws.Cells(1, Columns.Count).End(xlToLeft).Column
+    
+    For i = 1 To lastCol
+        If WorksheetFunction.CountA(ws.Columns(i)) > 0 And ws.Columns(i).ColumnWidth > 36 Then
+            ws.Columns(i).WrapText = True
+        End If
+    Next i
+
+End Sub

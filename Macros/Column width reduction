@@ -1,0 +1,38 @@
+Here's an example VBA code that loops through all non-empty columns and for each cell in a column while any cell length is greater than **38** then reduces the column width by **5** until the column width is **35** and reduces row height by **5** until the row height is **15**:
+
+```vba
+Sub LoopThroughColumns()
+    Dim ws As Worksheet
+    Dim col As Range
+    Dim cel As Range
+    
+    Set ws = ActiveSheet
+    
+    For Each col In ws.UsedRange.Columns
+        If WorksheetFunction.CountA(col) > 0 Then
+            For Each cel In col.Cells
+                Do While cel.Value <> "" And Len(cel.Value) > 38 And col.ColumnWidth > 35 And cel.RowHeight > 15
+                    col.ColumnWidth = col.ColumnWidth - 5
+                    cel.RowHeight = cel.RowHeight - 5
+                Loop
+            Next cel
+        End If
+    Next col
+End Sub
+```
+
+I hope this helps! Let me know if you have any other questions.
+
+Source: Conversation with Bing, 4/11/2023(1) How to loop through rows until blank in Excel column? - ExtendOffice. https://www.extendoffice.com/documents/excel/4438-excel-loop-until-blank.html Accessed 4/11/2023.
+(2) How to loop through only the non-empty cell in a column in an excel .... https://stackoverflow.com/questions/45670505/how-to-loop-through-only-the-non-empty-cell-in-a-column-in-an-excel-sheet-via-vb Accessed 4/11/2023.
+(3) vba - Loop Through Non Blank Cells - Stack Overflow. https://stackoverflow.com/questions/45180061/loop-through-non-blank-cells Accessed 4/11/2023.
+(4) VBA how to loop through a column in Excel - Stack Overflow. https://stackoverflow.com/questions/7512843/vba-how-to-loop-through-a-column-in-excel Accessed 4/11/2023.
+(5) Excel VBA: Loop Through Columns in Range (5 Examples). https://www.exceldemy.com/excel-vba-loop-through-columns-in-range/ Accessed 4/11/2023.
+(6) VBA code for "Text to Column - Fixed Width" - loop. https://stackoverflow.com/questions/59752905/vba-code-for-text-to-column-fixed-width-loop Accessed 4/11/2023.
+(7) Row Height - Column Width - VBA Code Examples - Automate Excel. https://www.automateexcel.com/vba/row-height-column-width/ Accessed 4/11/2023.
+(8) Excel VBA calculate and set column width - Stack Overflow. https://stackoverflow.com/questions/34440192/excel-vba-calculate-and-set-column-width Accessed 4/11/2023.
+(9) Change Row Height and Column Width using Excel VBA. https://analysistabs.com/excel-vba/change-row-height-column-width/ Accessed 4/11/2023.
+(10) How to loop through rows until blank in Excel column? - ExtendOffice. https://www.extendoffice.com/documents/excel/4438-excel-loop-until-blank.html Accessed 4/11/2023.
+(11) Excel VBA to Loop through Range until Empty Cell (4 Examples) - ExcelDemy. https://www.exceldemy.com/excel-vba-loop-through-range-until-empty/ Accessed 4/11/2023.
+(12) vba - Loop Through Non Blank Cells - Stack Overflow. https://stackoverflow.com/questions/45180061/loop-through-non-blank-cells Accessed 4/11/2023.
+(13) VBA how to loop through a column in Excel - Stack Overflow. https://stackoverflow.com/questions/7512843/vba-how-to-loop-through-a-column-in-excel Accessed 4/11/2023.
